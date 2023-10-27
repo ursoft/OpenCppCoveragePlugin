@@ -15,7 +15,12 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using OpenCppCoverage.VSPackage.CoverageRateBuilder;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Text;
+using System.Windows;
+using System.Windows.Input;
 
 namespace OpenCppCoverage.VSPackage.CoverageTree
 {
@@ -43,7 +48,6 @@ namespace OpenCppCoverage.VSPackage.CoverageTree
         //-----------------------------------------------------------------------
         public IEnumerable<ModuleTreeNode> Modules { get; private set; }
     }
-
     //-----------------------------------------------------------------------
     class ModuleTreeNode : BasicCoverageTreeNode
     {

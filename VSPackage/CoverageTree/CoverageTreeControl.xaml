@@ -43,6 +43,9 @@
                 IsChecked="{Binding DisplayCoverage}"
                 VerticalAlignment="Center"
                 Margin="20 0 5 0"/>
+            <Button 
+                Content="Upd UT banners" VerticalAlignment="Center"
+                Margin="20 0 5 0" Command="{Binding UpdUT}"/>
         </StackPanel>
         <sd:SharpTreeView 
                 SelectedItem="{Binding Current, Mode=OneWayToSource}"

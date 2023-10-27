@@ -20,6 +20,10 @@ using ICSharpCode.TreeView;
 using OpenCppCoverage.VSPackage.CoverageRateBuilder;
 using OpenCppCoverage.VSPackage.Helper;
 using System;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Input;
 
 namespace OpenCppCoverage.VSPackage.CoverageTree
 {
@@ -85,6 +89,93 @@ namespace OpenCppCoverage.VSPackage.CoverageTree
         {
             get { return this.rootNode; }
             private set { this.SetField(ref this.rootNode, value); }
+        }
+        private UpdateUTBannersCommand updUT;
+        public UpdateUTBannersCommand UpdUT
+        {
+            get
+            {
+                if (updUT == null)
+                    updUT = new UpdateUTBannersCommand(this);
+
+                return updUT;
+            }
+        }
+        enum VisitOutcome { VO_ERROR, VO_UPDATED, VO_SKIPPED };
+        string logFileName = Path.GetTempFileName();
+        private VisitOutcome Visit(string fileName, int coveredLines, int totalLines) {
+            string fl = "<not read yet>";
+            try
+            {
+                string newBanner = $"//UT Coverage: {(int)(100.0 * coveredLines / totalLines + 0.5)}%, {coveredLines}/{totalLines}";
+                using (var sr = File.OpenText(fileName)) { 
+                    fl = sr.ReadLine();
+                    if (fl.StartsWith(newBanner) || !fl.StartsWith("//UT Coverage") /*opc, websockets*/) return VisitOutcome.VO_SKIPPED;
+                    if (coveredLines != totalLines)
+                    {
+                        newBanner = newBanner.Replace("100%", "99%");
+                        newBanner += (fileName.EndsWith("_test.cpp")) ? ", ENOUGH" : ", NEED_MORE";
+                    }
+                    int pos = fl.IndexOf(" (");
+                    if (pos != -1)
+                        newBanner += fl.Substring(pos);
+                    var remains = sr.ReadToEnd();
+                    sr.Close();
+                    File.WriteAllText(fileName, newBanner + "\r\n", Encoding.UTF8);
+                    File.AppendAllText(fileName, remains);
+                    return VisitOutcome.VO_UPDATED;
+                }
+            } catch(Exception ex)
+            {
+                File.AppendAllText(logFileName, $"Excepion {ex.ToString()} while processing {fileName} {coveredLines}/{totalLines}, fl={fl}");
+                return VisitOutcome.VO_ERROR;
+            }
+        }
+        public void UpdateUtBanners() {
+            dte.Application.ExecuteCommand("File.SaveAll");
+            int err = 0, upd = 0, skip = 0;
+            foreach (var module in Root.Modules)
+            {
+                foreach (var child in module.Files)
+                {
+                    if (child.IsVisible && (child.Children == null || child.Children.Count == 0) && 
+                        !child.Text.ToString().ToLower().EndsWith(".dll") &&
+                        !child.Text.ToString().ToLower().EndsWith(".exe") && File.Exists(child.Text.ToString())) {
+                        switch(Visit(child.Text.ToString(), child.CoveredLineCount, child.TotalLineCount)) { 
+                            case VisitOutcome.VO_ERROR: err++; break;
+                            case VisitOutcome.VO_UPDATED: upd++; break;
+                            case VisitOutcome.VO_SKIPPED: skip++; break;
+                        }
+                    }
+                }
+            }
+            if (err != 0) {
+                System.Diagnostics.Process.Start("notepad.exe", logFileName);
+                MessageBox.Show($"Files updated: {upd}, skipped: {skip}, err: {err}, total: {err + upd + skip}", "OpenCppCoverage", MessageBoxButton.OK, MessageBoxImage.Stop);
+            } else { 
+                MessageBox.Show($"Files updated: {upd}, skipped: {skip}, total: {err + upd + skip}", "OpenCppCoverage", MessageBoxButton.OK, MessageBoxImage.Information); 
+            }
+        }
+        public class UpdateUTBannersCommand : ICommand
+        {
+            private CoverageTreeController parent;
+
+            public UpdateUTBannersCommand(CoverageTreeController aParent)
+            {
+                parent = aParent;
+            }
+
+            public event EventHandler CanExecuteChanged;
+
+            public bool CanExecute(object parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object parameter)
+            {
+                parent.UpdateUtBanners();
+            }
         }
 
         //-----------------------------------------------------------------------
